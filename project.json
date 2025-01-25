@@ -1,0 +1,8 @@
+{
+  "name": "com.cyberyyc.holomotion-spatial-robot-teleoperation",
+  "version": "0.1.0",
+  "displayName": "HoloMotion Spatial Robot Teleoperation",
+  "unity": "2021.3",
+  "description": "Selected Unity runtime modules for HoloMotion Spatial Robot Teleoperation",
+  "license": "MIT"
+}
