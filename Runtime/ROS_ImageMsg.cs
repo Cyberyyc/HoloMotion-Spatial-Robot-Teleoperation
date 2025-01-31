@@ -1,147 +1,147 @@
-using RosMessageTypes.Sensor;
-using Unity.Robotics.ROSTCPConnector;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class ROS_ImageMsg : MonoBehaviour
-{
-    [Header("UI Components")]
-    public RawImage ARMImagePanel;
-    private Texture2D ARMTexture;
-
-    [Header("ÏÔÊ¾ÉèÖÃ")]
-    [Tooltip("ÄãÏ£ÍûÔÚÆÁÄ»ÉÏ¿´µ½µÄ»­Ãæ¿í¶È (ÏñËØ)£¬¸ß¶È»á×Ô¶¯¼ÆËã")]
-    public float displayWidth = 480f; // ½¨ÒéÉèÎª 480 »ò 360£¬¸ù¾İÄãµÄUI²¼¾ÖĞèÇó
-
-    [Header("Ç¿Á¦Ğı×ªÉèÖÃ")]
-    [Tooltip("¹´Ñ¡´ËÏîÒÔ½â¾öROSÍ¼ÏñÄ¬ÈÏÉÏÏÂµßµ¹µÄÎÊÌâ")]
-    public bool flipVertical = true;
-
-    [Tooltip("Ğı×ª½Ç¶È (90, -90, 180 µÈ)")]
-    [Range(-360, 360)]
-    public float rotationAngle = -90f; // ÄæÊ±Õë°²×°Í¨³£Ìî -90 »ò 90
-
-    [Tooltip("ÊÇ·ñ×Ô¶¯Ëø¶¨³¤¿í±È£¨·ÀÖ¹Ğı×ªºó»­Ãæ±»Ñ¹±â£©")]
-    public bool autoLockAspectRatio = true;
-
-    // ×´Ì¬¼ÇÂ¼
-    private float lastRotationAngle;
-    private float lastDisplayWidth;
-    private bool isInitialized = false;
-
-    void Start()
-    {
-        ViewConnect();
-    }
-
-    // ¡¾ºËĞÄ»úÖÆ¡¿Ê¹ÓÃ LateUpdate
-    // ËüµÄÖ´ĞĞË³ĞòÔÚ LayoutGroup ¼ÆËãÖ®ºó¡£ÎŞÂÛ¸¸ÎïÌåÔõÃ´Ç¿ÖÆ¹éÁã£¬
-    // ÕâÀï¶¼»áÔÚäÖÈ¾Ç°×îºóÒ»¿Ì°Ñ½Ç¶ÈÔÙ´Î¸Ä»ØÀ´¡£
-    void LateUpdate()
-    {
-        if (ARMImagePanel == null) return;
-
-        // 1. Ç¿Á¦Ó¦ÓÃĞı×ª (½â¾öLayout GroupÖØÖÃÎÊÌâ)
-        Vector3 currentRot = ARMImagePanel.rectTransform.localEulerAngles;
-        // Ö»ÓĞµ±½Ç¶ÈÆ«²î´óÊ±²Å¸³Öµ£¬±ÜÃâ¸¡µã¶¶¶¯
-        if (Mathf.Abs(currentRot.z - rotationAngle) > 0.01f)
-        {
-            ARMImagePanel.rectTransform.localEulerAngles = new Vector3(0, 0, rotationAngle);
-        }
-
-        // 2. Ç¿Á¦Ó¦ÓÃ·­×ª (UV Rect)
-        if (flipVertical)
-            ARMImagePanel.uvRect = new Rect(0, 1, 1, -1);
-        else
-            ARMImagePanel.uvRect = new Rect(0, 0, 1, 1);
-
-        // 3. ÊµÊ±¼ì²â²¢ĞŞÕı³¤¿í±È
-        if (ARMTexture != null && autoLockAspectRatio)
-        {
-            // Èç¹ûĞı×ª½Ç¶È»òÄ¿±ê¿í¶È·¢Éú±ä»¯£¬»òÕß¸Õ³õÊ¼»¯£¬Ôò¸üĞÂ³ß´ç
-            if (lastRotationAngle != rotationAngle || lastDisplayWidth != displayWidth || !isInitialized)
-            {
-                UpdateAspectRatio();
-                lastRotationAngle = rotationAngle;
-                lastDisplayWidth = displayWidth;
-                isInitialized = true;
-            }
-        }
-    }
-
-    public void ViewConnect()
-    {
-        ROSConnection.GetOrCreateInstance().Subscribe<CompressedImageMsg>(
-            "/camera/color/image_raw/compressed",
-            GetARMView
-        );
-    }
-
-    private void GetARMView(CompressedImageMsg msg)
-    {
-        if (ARMTexture == null)
-        {
-            ARMTexture = new Texture2D(2, 2);
-        }
-
-        ARMTexture.LoadImage(msg.data);
-        ARMTexture.Apply();
-
-        if (ARMImagePanel != null)
-        {
-            ARMImagePanel.texture = ARMTexture;
-
-            // µÚÒ»´ÎÊÕµ½Í¼ÏñÊı¾İÊ±£¬È·±£³ß´ç±»¼ÆËãÒ»´Î
-            if (ARMTexture.width > 0 && !isInitialized)
-            {
-                UpdateAspectRatio();
-            }
-        }
-    }
-
-    // ¡¾ºËĞÄĞŞ¸´¡¿»ùÓÚÄ¿±ê¿í¶ÈËø¶¨±ÈÀı£¬¶Å¾ø±äĞÎ
-    private void UpdateAspectRatio()
-    {
-        if (ARMImagePanel == null || ARMTexture == null || ARMTexture.width == 0) return;
-
-        // 1. »ñÈ¡ÎÆÀíµÄÔ­Ê¼ÎïÀí±ÈÀı (ÀıÈç 640/480 = 1.333)
-        float textureAspect = (float)ARMTexture.width / ARMTexture.height;
-
-        float absAngle = Mathf.Abs(rotationAngle % 180);
-
-        // 2. ¸ù¾İĞı×ª½Ç¶È¼ÆËã RectTransform µÄ sizeDelta
-        // Ô­Àí£ºRectTransform µÄ (X, Y) ±ØĞëÊ¼ÖÕ·ûºÏ textureAspect µÄ±ÈÀı (X/Y = 1.333)
-        // ÕâÑùÍ¼Ïñ²Å²»»á±»À­Éì¡£ÎÒÃÇÖ»¸Ä±ä"ÄÄ¸öÖá¶ÔÓ¦ÆÁÄ»¿í¶È"¡£
-
-        // --- ³¡¾° A: ÊúÆÁ×´Ì¬ (Ğı×ª 90 »ò 270 »ò -90 ¶È) ---
-        // ´ËÊ± RectTransform ±¾µØ×ø±êÏµµÄ Y Öá£¬±ä³ÉÁËÆÁÄ»ÉÏµÄ"Ë®Æ½·½Ïò"¡£
-        if (Mathf.Approximately(absAngle, 90f))
-        {
-            // ÎÒÃÇÏ£ÍûÊÓ¾õ¿í¶È (Local Y) = displayWidth
-            float h = displayWidth;
-
-            // Local X (ÊÓ¾õ¸ß¶È) ±ØĞë°´±ÈÀıËõ·Å: X / Y = textureAspect
-            // ËùÒÔ X = Y * aspect
-            float w = displayWidth * textureAspect;
-
-            ARMImagePanel.rectTransform.sizeDelta = new Vector2(w, h);
-        }
-        // --- ³¡¾° B: ºáÆÁ×´Ì¬ (Ğı×ª 0 »ò 180 ¶È) ---
-        // ´ËÊ± RectTransform ±¾µØ×ø±êÏµµÄ X Öá£¬¾ÍÊÇÆÁÄ»ÉÏµÄ"Ë®Æ½·½Ïò"¡£
-        else
-        {
-            // ÎÒÃÇÏ£ÍûÊÓ¾õ¿í¶È (Local X) = displayWidth
-            float w = displayWidth;
-
-            // Local Y (ÊÓ¾õ¸ß¶È) °´±ÈÀı: X / Y = aspect => Y = X / aspect
-            float h = displayWidth / textureAspect;
-
-            ARMImagePanel.rectTransform.sizeDelta = new Vector2(w, h);
-        }
-
-        // Ç¿ÖÆÖØÖÃ Scale£¬·ÀÖ¹±»¸¸ÎïÌå¸ÉÈÅ
-        ARMImagePanel.rectTransform.localScale = Vector3.one;
-
-        Debug.Log($"[±ÈÀıËø¶¨] ½Ç¶È:{rotationAngle}, ¼ÆËã³ß´ç:{ARMImagePanel.rectTransform.sizeDelta} (Ä¿±êÊÓ¿í: {displayWidth})");
-    }
+using RosMessageTypes.Sensor;
+using Unity.Robotics.ROSTCPConnector;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ROS_ImageMsg : MonoBehaviour
+{
+    [Header("UI Components")]
+    public RawImage ARMImagePanel;
+    private Texture2D ARMTexture;
+
+    [Header("æ˜¾ç¤ºè®¾ç½®")]
+    [Tooltip("ä½ å¸Œæœ›åœ¨å±å¹•ä¸Šçœ‹åˆ°çš„ç”»é¢å®½åº¦ (åƒç´ )ï¼Œé«˜åº¦ä¼šè‡ªåŠ¨è®¡ç®—")]
+    public float displayWidth = 480f; // å»ºè®®è®¾ä¸º 480 æˆ– 360ï¼Œæ ¹æ®ä½ çš„UIå¸ƒå±€éœ€æ±‚
+
+    [Header("å¼ºåŠ›æ—‹è½¬è®¾ç½®")]
+    [Tooltip("å‹¾é€‰æ­¤é¡¹ä»¥è§£å†³ROSå›¾åƒé»˜è®¤ä¸Šä¸‹é¢ å€’çš„é—®é¢˜")]
+    public bool flipVertical = true;
+
+    [Tooltip("æ—‹è½¬è§’åº¦ (90, -90, 180 ç­‰)")]
+    [Range(-360, 360)]
+    public float rotationAngle = -90f; // é€†æ—¶é’ˆå®‰è£…é€šå¸¸å¡« -90 æˆ– 90
+
+    [Tooltip("æ˜¯å¦è‡ªåŠ¨é”å®šé•¿å®½æ¯”ï¼ˆé˜²æ­¢æ—‹è½¬åç”»é¢è¢«å‹æ‰ï¼‰")]
+    public bool autoLockAspectRatio = true;
+
+    // çŠ¶æ€è®°å½•
+    private float lastRotationAngle;
+    private float lastDisplayWidth;
+    private bool isInitialized = false;
+
+    void Start()
+    {
+        ViewConnect();
+    }
+
+    // ã€æ ¸å¿ƒæœºåˆ¶ã€‘ä½¿ç”¨ LateUpdate
+    // å®ƒçš„æ‰§è¡Œé¡ºåºåœ¨ LayoutGroup è®¡ç®—ä¹‹åã€‚æ— è®ºçˆ¶ç‰©ä½“æ€ä¹ˆå¼ºåˆ¶å½’é›¶ï¼Œ
+    // è¿™é‡Œéƒ½ä¼šåœ¨æ¸²æŸ“å‰æœ€åä¸€åˆ»æŠŠè§’åº¦å†æ¬¡æ”¹å›æ¥ã€‚
+    void LateUpdate()
+    {
+        if (ARMImagePanel == null) return;
+
+        // 1. å¼ºåŠ›åº”ç”¨æ—‹è½¬ (è§£å†³Layout Groupé‡ç½®é—®é¢˜)
+        Vector3 currentRot = ARMImagePanel.rectTransform.localEulerAngles;
+        // åªæœ‰å½“è§’åº¦åå·®å¤§æ—¶æ‰èµ‹å€¼ï¼Œé¿å…æµ®ç‚¹æŠ–åŠ¨
+        if (Mathf.Abs(currentRot.z - rotationAngle) > 0.01f)
+        {
+            ARMImagePanel.rectTransform.localEulerAngles = new Vector3(0, 0, rotationAngle);
+        }
+
+        // 2. å¼ºåŠ›åº”ç”¨ç¿»è½¬ (UV Rect)
+        if (flipVertical)
+            ARMImagePanel.uvRect = new Rect(0, 1, 1, -1);
+        else
+            ARMImagePanel.uvRect = new Rect(0, 0, 1, 1);
+
+        // 3. å®æ—¶æ£€æµ‹å¹¶ä¿®æ­£é•¿å®½æ¯”
+        if (ARMTexture != null && autoLockAspectRatio)
+        {
+            // å¦‚æœæ—‹è½¬è§’åº¦æˆ–ç›®æ ‡å®½åº¦å‘ç”Ÿå˜åŒ–ï¼Œæˆ–è€…åˆšåˆå§‹åŒ–ï¼Œåˆ™æ›´æ–°å°ºå¯¸
+            if (lastRotationAngle != rotationAngle || lastDisplayWidth != displayWidth || !isInitialized)
+            {
+                UpdateAspectRatio();
+                lastRotationAngle = rotationAngle;
+                lastDisplayWidth = displayWidth;
+                isInitialized = true;
+            }
+        }
+    }
+
+    public void ViewConnect()
+    {
+        ROSConnection.GetOrCreateInstance().Subscribe<CompressedImageMsg>(
+            "/camera/color/image_raw/compressed",
+            GetARMView
+        );
+    }
+
+    private void GetARMView(CompressedImageMsg msg)
+    {
+        if (ARMTexture == null)
+        {
+            ARMTexture = new Texture2D(2, 2);
+        }
+
+        ARMTexture.LoadImage(msg.data);
+        ARMTexture.Apply();
+
+        if (ARMImagePanel != null)
+        {
+            ARMImagePanel.texture = ARMTexture;
+
+            // ç¬¬ä¸€æ¬¡æ”¶åˆ°å›¾åƒæ•°æ®æ—¶ï¼Œç¡®ä¿å°ºå¯¸è¢«è®¡ç®—ä¸€æ¬¡
+            if (ARMTexture.width > 0 && !isInitialized)
+            {
+                UpdateAspectRatio();
+            }
+        }
+    }
+
+    // ã€æ ¸å¿ƒä¿®å¤ã€‘åŸºäºç›®æ ‡å®½åº¦é”å®šæ¯”ä¾‹ï¼Œæœç»å˜å½¢
+    private void UpdateAspectRatio()
+    {
+        if (ARMImagePanel == null || ARMTexture == null || ARMTexture.width == 0) return;
+
+        // 1. è·å–çº¹ç†çš„åŸå§‹ç‰©ç†æ¯”ä¾‹ (ä¾‹å¦‚ 640/480 = 1.333)
+        float textureAspect = (float)ARMTexture.width / ARMTexture.height;
+
+        float absAngle = Mathf.Abs(rotationAngle % 180);
+
+        // 2. æ ¹æ®æ—‹è½¬è§’åº¦è®¡ç®— RectTransform çš„ sizeDelta
+        // åŸç†ï¼šRectTransform çš„ (X, Y) å¿…é¡»å§‹ç»ˆç¬¦åˆ textureAspect çš„æ¯”ä¾‹ (X/Y = 1.333)
+        // è¿™æ ·å›¾åƒæ‰ä¸ä¼šè¢«æ‹‰ä¼¸ã€‚æˆ‘ä»¬åªæ”¹å˜"å“ªä¸ªè½´å¯¹åº”å±å¹•å®½åº¦"ã€‚
+
+        // --- åœºæ™¯ A: ç«–å±çŠ¶æ€ (æ—‹è½¬ 90 æˆ– 270 æˆ– -90 åº¦) ---
+        // æ­¤æ—¶ RectTransform æœ¬åœ°åæ ‡ç³»çš„ Y è½´ï¼Œå˜æˆäº†å±å¹•ä¸Šçš„"æ°´å¹³æ–¹å‘"ã€‚
+        if (Mathf.Approximately(absAngle, 90f))
+        {
+            // æˆ‘ä»¬å¸Œæœ›è§†è§‰å®½åº¦ (Local Y) = displayWidth
+            float h = displayWidth;
+
+            // Local X (è§†è§‰é«˜åº¦) å¿…é¡»æŒ‰æ¯”ä¾‹ç¼©æ”¾: X / Y = textureAspect
+            // æ‰€ä»¥ X = Y * aspect
+            float w = displayWidth * textureAspect;
+
+            ARMImagePanel.rectTransform.sizeDelta = new Vector2(w, h);
+        }
+        // --- åœºæ™¯ B: æ¨ªå±çŠ¶æ€ (æ—‹è½¬ 0 æˆ– 180 åº¦) ---
+        // æ­¤æ—¶ RectTransform æœ¬åœ°åæ ‡ç³»çš„ X è½´ï¼Œå°±æ˜¯å±å¹•ä¸Šçš„"æ°´å¹³æ–¹å‘"ã€‚
+        else
+        {
+            // æˆ‘ä»¬å¸Œæœ›è§†è§‰å®½åº¦ (Local X) = displayWidth
+            float w = displayWidth;
+
+            // Local Y (è§†è§‰é«˜åº¦) æŒ‰æ¯”ä¾‹: X / Y = aspect => Y = X / aspect
+            float h = displayWidth / textureAspect;
+
+            ARMImagePanel.rectTransform.sizeDelta = new Vector2(w, h);
+        }
+
+        // å¼ºåˆ¶é‡ç½® Scaleï¼Œé˜²æ­¢è¢«çˆ¶ç‰©ä½“å¹²æ‰°
+        ARMImagePanel.rectTransform.localScale = Vector3.one;
+
+        Debug.Log($"[æ¯”ä¾‹é”å®š] è§’åº¦:{rotationAngle}, è®¡ç®—å°ºå¯¸:{ARMImagePanel.rectTransform.sizeDelta} (ç›®æ ‡è§†å®½: {displayWidth})");
+    }
 }
